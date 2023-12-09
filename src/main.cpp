@@ -4,6 +4,7 @@
 #include "max6675.h"
 #include <WiFi.h>
 #include "PubSubClient.h"
+#include <NTPClient.h>
 #include "ascon/api.h"
 #include "ascon/ascon.h"
 #include "ascon/crypto_aead.h"
@@ -18,6 +19,7 @@ int thermoCLK = 6;
 
 char stemp[10];
 float temp;
+char strTimeStamp[20];
 
 // WiFi 
 const char *ssid = "Fibertel WiFi367 2.4GHz"; // Nombre WiFi
@@ -38,6 +40,8 @@ void callback(char *topic, byte *payload, unsigned int length);
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+WiFiUDP ntpUDP; // UDP client
+NTPClient timeClient(ntpUDP); // NTP client
 static unsigned long long mlen;
 static unsigned long long clen;
 
@@ -80,6 +84,9 @@ void setup() {
     // Conexión con el broker MQTT
     client.setServer(mqtt_broker, mqtt_port);
     client.setCallback(callback);
+
+    timeClient.begin(); // init NTP
+    timeClient.setTimeOffset(-10800); // 0= GMT, 3600 = GMT+1
     
     while (!client.connected()) {
         String client_id = "esp32-client-";
@@ -100,28 +107,49 @@ void setup() {
 }
 
 void loop() {
+  
+  //Obtener hora de Argentina 
+
+  if(!timeClient.update()) 
+  {
+    timeClient.forceUpdate();
+  }
+
+  String timestamp = timeClient.getFormattedTime();
+  
+  int i;
+  for(i = 0; i < timestamp.length(); i++) {
+      strTimeStamp[i] = timestamp[i];
+  }
+  strTimeStamp[i] = '\0';
+  
   //Se guarda la temperatura en grados celsius
   temp = thermocouple.readCelsius();
   
   dtostrf(temp, 4, 2, stemp); //Convierte el float a una cadena
 
   strcat(stemp, " °C");
-  
-  strcpy(plaintext, stemp);
+  strcat(plaintext, strTimeStamp);
+  strcat(plaintext, " , ");
+  strcat(plaintext, stemp);
+
+  //sprintf(plaintext, "%s , %s °C", timestamp, stemp);
+
   crypto_aead_encrypt(cipher,&clen,plaintext,strlen(plaintext),ad,strlen(ad),nsec,npub,key);
   
   //Se convierte cipher a hexa y se guarda en chex
   string2hexString(cipher,clen,chex);
 
   sprintf(stringToSendToMosquitto,"%s",chex);
-  sprintf(strAux, "Message plaintext: %s\n", stemp);
+  sprintf(strAux, "Message plaintext: %s\n", plaintext);
   Serial.print(strAux);
 
   client.publish(topic, stringToSendToMosquitto);
   client.loop();
   
+  plaintext[0] = '\0';
   // Para que se actualicen los datos del MAX6675 se necesita un delay minimo de 250ms
-  delay(1000);
+  delay(5000);
 }
 
 
