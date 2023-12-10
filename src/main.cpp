@@ -29,9 +29,9 @@ static char nonce[2*CRYPTO_NPUBBYTES+1]="000000000000111111111111";
 static char add[CRYPTO_ABYTES]="";
 
 //=====[TEMPERATURE SENSOR]====================================
-int thermoDO = 4;
-int thermoCS = 5;
-int thermoCLK = 6;
+int thermoDO = 3;
+int thermoCS = 1;
+int thermoCLK = 0;
 char stemp[10];
 float temp;
 char strTimeStamp[20];
@@ -50,7 +50,6 @@ static char stringToSendToMosquitto[500];
 
 //=====[AUXILIAR VARIABLES]=======================================
 static char strAux[100];
-
 //=====[Declaration and initialization of public global objects]===============
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -130,6 +129,7 @@ void loop() {
   strcat(plaintext, strTimeStamp);
   strcat(plaintext, " , ");
   strcat(plaintext, stemp);
+  strcat(plaintext, nonce);
 
   //sprintf(plaintext, "%s , %s °C", timestamp, stemp);
   hextobyte(keyhex,key);
@@ -149,6 +149,11 @@ void loop() {
   
   plaintext[0] = '\0';
   // Para que se actualicen los datos del MAX6675 se necesita un delay minimo de 250ms
+  nonce[0] = '\0';
+  for (int i = 0; i < 2*CRYPTO_NPUBBYTES; i++) {
+    nonce[i] = random('0', '9' + 1); // ASCII characters between 'A' and 'Z'
+  }
+  nonce[2*CRYPTO_NPUBBYTES] = '\0'; // Null-terminate the string
   delay(5000);
 }
 
