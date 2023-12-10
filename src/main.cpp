@@ -25,7 +25,7 @@ static unsigned char nsec[CRYPTO_ABYTES]="";
 static unsigned char key[CRYPTO_KEYBYTES];
 static char chex[CRYPTO_BYTES]="";
 static char keyhex[2*CRYPTO_KEYBYTES+1]="0123456789ABCDEF0123456789ABCDEF";
-static char nonce[2*CRYPTO_NPUBBYTES+1]="000000000000111111111111";
+static char nonce[2*CRYPTO_NPUBBYTES+1]="00000000000000001111111111111111";
 static char add[CRYPTO_ABYTES]="";
 
 //=====[TEMPERATURE SENSOR]====================================
@@ -50,6 +50,10 @@ static char stringToSendToMosquitto[500];
 
 //=====[AUXILIAR VARIABLES]=======================================
 static char strAux[100];
+
+//=====[AUXILIAR ASCON]=======================================
+static char nextNonce[2*CRYPTO_NPUBBYTES+1];
+
 //=====[Declaration and initialization of public global objects]===============
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -101,6 +105,8 @@ void setup() {
     // Publicación y suscripción
     client.subscribe(topic);
 
+    client.publish(topic, "1");
+
 }
 
 void loop() {
@@ -125,16 +131,22 @@ void loop() {
   
   dtostrf(temp, 4, 2, stemp); //Convierte el float a una cadena
 
+  nextNonce[0] = '\0';
+  for (int i = 0; i < 2*CRYPTO_NPUBBYTES; i++) {
+      nextNonce[i] = random('0', '9' + 1); // ASCII characters between 'A' and 'Z'
+    }
+  nonce[2*CRYPTO_NPUBBYTES] = '\0'; // Null-terminate the string
   strcat(stemp, " °C");
   strcat(plaintext, strTimeStamp);
   strcat(plaintext, " , ");
   strcat(plaintext, stemp);
-  strcat(plaintext, nonce);
+  strcat(plaintext, " , "); 
+  strcat(plaintext, nextNonce);
 
   //sprintf(plaintext, "%s , %s °C", timestamp, stemp);
   hextobyte(keyhex,key);
   hextobyte(nonce,npub);
-
+  
   crypto_aead_encrypt(cipher,&clen,plaintext,strlen(plaintext),ad,strlen(ad),nsec,npub,key);
   
   //Se convierte cipher a hexa y se guarda en chex
@@ -146,14 +158,10 @@ void loop() {
 
   client.publish(topic, stringToSendToMosquitto);
   client.loop();
-  
+  strcpy(nonce, nextNonce);
   plaintext[0] = '\0';
   // Para que se actualicen los datos del MAX6675 se necesita un delay minimo de 250ms
-  nonce[0] = '\0';
-  for (int i = 0; i < 2*CRYPTO_NPUBBYTES; i++) {
-    nonce[i] = random('0', '9' + 1); // ASCII characters between 'A' and 'Z'
-  }
-  nonce[2*CRYPTO_NPUBBYTES] = '\0'; // Null-terminate the string
+
   delay(5000);
 }
 
@@ -161,11 +169,13 @@ void loop() {
 void callback(char *topic, byte *payload, unsigned int length) {
     Serial.print("Message arrived in topic: ");
     Serial.println(topic);
-    Serial.print("Message encrypted:");
+    Serial.print("Message:");
+
     for (int i = 0; i < length; i++) {
         Serial.print((char) payload[i]);
     }
     Serial.println();
+
     Serial.println("-----------------------");
 }
 
