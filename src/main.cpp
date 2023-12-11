@@ -133,7 +133,7 @@ void loop() {
 
   nextNonce[0] = '\0';
   for (int i = 0; i < 2*CRYPTO_NPUBBYTES; i++) {
-      nextNonce[i] = random('0', '9' + 1); // ASCII characters between 'A' and 'Z'
+      nextNonce[i] = random('0', '9' + 1); // ASCII numbers between '0' and '9'
     }
   nonce[2*CRYPTO_NPUBBYTES] = '\0'; // Null-terminate the string
   strcat(stemp, " °C");
